@@ -1,37 +1,57 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. 允许跨域（可选，防止部分环境报错）
+  // 1. 设置跨域，允许小程序访问
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ reply: '只允许 POST 请求' });
   }
 
   try {
-    // 2. 第一重检查：检查 Key 是否存在
     const apiKey = process.env.GEMINI_API_KEY;
+    const { message } = req.body;
+
     if (!apiKey) {
-      throw new Error("致命错误：在 Vercel 环境变量中找不到 GEMINI_API_KEY！请去 Settings -> Environment Variables 添加。");
+      throw new Error("没有找到 API Key，请在 Vercel 设置里添加");
     }
 
-    const { message } = req.body;
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // 3. 使用 flash 模型（更稳定）
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
-    const result = await model.generateContent(message);
-    const response = await result.response;
-    const text = response.text();
-    
-    res.status(200).json({ reply: text });
+    // 2. 【关键】直接手动向 Google 发请求，绕过所有 SDK 版本问题
+    // 我们强制使用 v1beta 版本，这是肯定支持 1.5-flash 的
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ 
+          parts: [{ text: message }] 
+        }]
+      })
+    });
+
+    const data = await response.json();
+
+    // 3. 检查 Google 有没有报错
+    if (!response.ok) {
+      throw new Error(data.error?.message || "Google API 连接失败");
+    }
+
+    // 4. 提取回复内容
+    const replyText = data.candidates[0].content.parts[0].text;
+    res.status(200).json({ reply: replyText });
 
   } catch (error) {
-    console.error("服务器报错:", error);
-    // 4. 【关键】把错误信息伪装成 AI 回复发给你，这样你就能看见了！
-    // 我们强制返回 200 状态码，确保微信能把错误显示出来
-    res.status(200).json({ reply: "【调试模式报错】: " + error.message });
+    console.error("报错:", error);
+    // 把错误直接显示在聊天框，方便调试
+    res.status(200).json({ reply: "❌ 报错了: " + error.message });
   }
 }
