@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     // 🔴 见证奇迹的时刻：这里填上了你查到的真名！
     // 并且我们强制使用 v1beta 接口，因为 preview 版都在这里
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-preview:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
