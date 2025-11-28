@@ -9,34 +9,48 @@ export default async function handler(req, res) {
     return;
   }
 
+  if (req.method !== 'POST') {
+    return res.status(405).json({ reply: '只允许 POST 请求' });
+  }
+
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("API Key 没填");
+    const { message } = req.body;
 
-    // ---------------------------------------------------------
-    // 🕵️‍♂️ 别猜了，直接去 Google 仓库里查！
-    // ---------------------------------------------------------
-    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    
-    const response = await fetch(listUrl, { method: 'GET' });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error("查询失败，Google 回复: " + JSON.stringify(data));
+    if (!apiKey) {
+      throw new Error("没有找到 API Key");
     }
 
-    // 提取出所有模型的“身份证号” (name)
-    const modelIDs = data.models.map(m => m.name).join('\n');
+    // 🔴 见证奇迹的时刻：这里填上了你查到的真名！
+    // 并且我们强制使用 v1beta 接口，因为 preview 版都在这里
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
 
-    // ---------------------------------------------------------
-    // 把查到的 ID 列表直接发回微信
-    // ---------------------------------------------------------
-    res.status(200).json({ 
-      reply: "✅ 查到了！你的 Key 支持的模型 ID 如下：\n\n" + modelIDs 
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ 
+          parts: [{ text: message }] 
+        }]
+      })
     });
+
+    const data = await response.json();
+
+    // 检查 Google 报错
+    if (!response.ok) {
+      throw new Error(data.error?.message || "Google API 连接失败");
+    }
+
+    // 提取回复
+    const replyText = data.candidates[0].content.parts[0].text;
+    res.status(200).json({ reply: replyText });
 
   } catch (error) {
     console.error("报错:", error);
-    res.status(200).json({ reply: "❌ 查询失败: " + error.message });
+    res.status(200).json({ reply: "❌ 报错了: " + error.message });
   }
 }
+
