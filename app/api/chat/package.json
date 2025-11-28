@@ -1,9 +1,0 @@
-{
-  "name": "chat-api",
-  "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "@google/generative-ai": "^0.1.0"
-  }
-}
